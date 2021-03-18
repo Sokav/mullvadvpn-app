@@ -1,6 +1,9 @@
 use crate::{format::print_keygen_event, new_rpc_client, Command, Error, Result};
 use clap::value_t;
 use mullvad_management_interface::types::{self, Timestamp, TunnelOptions};
+use mullvad_types::wireguard::{
+    DEFAULT_ROTATION_INTERVAL, MAX_ROTATION_INTERVAL, MIN_ROTATION_INTERVAL,
+};
 use std::{convert::TryFrom, time::Duration};
 
 pub struct Tunnel;
@@ -67,8 +70,29 @@ fn create_wireguard_keys_rotation_interval_subcommand() -> clap::App<'static, 's
         .subcommand(clap::SubCommand::with_name("get"))
         .subcommand(clap::SubCommand::with_name("reset").about("Use the default rotation interval"))
         .subcommand(
-            clap::SubCommand::with_name("set").arg(clap::Arg::with_name("interval").required(true)),
+            clap::SubCommand::with_name("set").arg(
+                clap::Arg::with_name("interval")
+                    .required(true)
+                    .validator(rotation_interval_validator),
+            ),
         )
+}
+
+fn rotation_interval_validator(v: String) -> std::result::Result<(), String> {
+    match v
+        .parse::<u64>()
+        .map_err(|_| "failed to parse integer".to_string())?
+    {
+        interval if interval < duration_hours(&MIN_ROTATION_INTERVAL) => Err(format!(
+            "interval must be at least {} hours",
+            duration_hours(&MIN_ROTATION_INTERVAL)
+        )),
+        interval if interval > duration_hours(&MAX_ROTATION_INTERVAL) => Err(format!(
+            "interval must be at most {} hours",
+            duration_hours(&MAX_ROTATION_INTERVAL)
+        )),
+        _ => Ok(()),
+    }
 }
 
 
@@ -223,21 +247,24 @@ impl Tunnel {
         let tunnel_options = Self::get_tunnel_options().await?;
         match tunnel_options.wireguard.unwrap().rotation_interval {
             Some(interval) => {
-                let hours = Duration::try_from(interval).unwrap().as_secs() / 60 / 60;
+                let hours = duration_hours(&Duration::try_from(interval).unwrap());
                 println!("Rotation interval: {} hour(s)", hours);
             }
-            None => println!("Rotation interval: default"),
+            None => println!(
+                "Rotation interval: default ({} hours)",
+                duration_hours(&DEFAULT_ROTATION_INTERVAL)
+            ),
         }
         Ok(())
     }
 
     async fn process_wireguard_rotation_interval_set(matches: &clap::ArgMatches<'_>) -> Result<()> {
         let rotate_interval =
-            value_t!(matches.value_of("interval"), u32).unwrap_or_else(|e| e.exit());
+            value_t!(matches.value_of("interval"), u64).unwrap_or_else(|e| e.exit());
         let mut rpc = new_rpc_client().await?;
-        rpc.set_wireguard_rotation_interval(types::Duration::from(Duration::from_secs(u64::from(
+        rpc.set_wireguard_rotation_interval(types::Duration::from(Duration::from_secs(
             60 * 60 * rotate_interval,
-        ))))
+        )))
         .await?;
         println!("Set key rotation interval: {} hour(s)", rotate_interval);
         Ok(())
@@ -246,7 +273,10 @@ impl Tunnel {
     async fn process_wireguard_rotation_interval_reset() -> Result<()> {
         let mut rpc = new_rpc_client().await?;
         rpc.reset_wireguard_rotation_interval(()).await?;
-        println!("Set key rotation interval: default");
+        println!(
+            "Set key rotation interval: default ({} hours)",
+            duration_hours(&DEFAULT_ROTATION_INTERVAL)
+        );
         Ok(())
     }
 
@@ -330,4 +360,8 @@ impl Tunnel {
         let utc = chrono::DateTime::<chrono::Utc>::from_utc(ndt, chrono::Utc);
         utc.with_timezone(&chrono::Local).to_string()
     }
+}
+
+fn duration_hours(duration: &Duration) -> u64 {
+    duration.as_secs() / 60 / 60
 }
