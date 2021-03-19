@@ -59,27 +59,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                     fatalError(error.displayChain(message: "Failed to load the tunnel for account"))
                 }
 
-                let rootViewController = RootContainerViewController()
-                rootViewController.delegate = self
+                switch UIDevice.current.userInterfaceIdiom {
+                case .pad:
+                    self.startPadInterfaceFlow()
 
-                let showMainController = { (_ animated: Bool) in
-                    self.showConnectController(in: rootViewController, animated: animated) {
-                        self.didPresentTheMainController()
-                    }
+                case .phone:
+                    self.startPhoneInterfaceFlow()
+
+                default:
+                    fatalError()
                 }
-
-                if Account.shared.isAgreedToTermsOfService {
-                    showMainController(false)
-                } else {
-                    self.showTermsOfService(in: rootViewController) {
-                        Account.shared.agreeToTermsOfService()
-
-                        showMainController(true)
-                    }
-                }
-
-                self.window?.rootViewController = rootViewController
-                self.rootContainer = rootViewController
             }
         }
 
@@ -93,7 +82,82 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         TunnelManager.shared.refreshTunnelState(completionHandler: nil)
     }
 
-    private func didPresentTheMainController() {
+    private func startPadInterfaceFlow() {
+        let rootViewController = RootContainerViewController()
+        rootViewController.delegate = self
+
+        rootViewController.setViewControllers([ConnectViewController()], animated: false)
+
+        self.window?.rootViewController = rootViewController
+        self.rootContainer = rootViewController
+
+        if !Account.shared.isAgreedToTermsOfService {
+            let consentViewController = ConsentViewController()
+            consentViewController.preferredContentSize = CGSize(width: 480, height: 600)
+            consentViewController.modalPresentationStyle = .formSheet
+            if #available(iOS 13.0, *) {
+                consentViewController.isModalInPresentation = true
+            }
+            consentViewController.completionHandler = { [weak self] (viewController) in
+                guard let self = self else { return }
+
+//                Account.shared.agreeToTermsOfService()
+                
+                if Account.shared.isLoggedIn {
+                    viewController.dismiss(animated: true) {
+                        // no-op
+                    }
+                } else {
+                    let loginViewController = LoginViewController()
+                    loginViewController.delegate = self
+                    loginViewController.preferredContentSize = CGSize(width: 320, height: 400)
+                    loginViewController.modalPresentationStyle = .formSheet
+                    if #available(iOS 13.0, *) {
+                        loginViewController.isModalInPresentation = true
+                    }
+                    viewController.dismiss(animated: true) {
+                        rootViewController.present(loginViewController, animated: true)
+                    }
+                }
+            }
+            rootViewController.present(consentViewController, animated: true)
+        } else if !Account.shared.isLoggedIn {
+            let loginViewController = LoginViewController()
+            loginViewController.delegate = self
+            loginViewController.preferredContentSize = CGSize(width: 320, height: 400)
+            loginViewController.modalPresentationStyle = .formSheet
+            if #available(iOS 13.0, *) {
+                loginViewController.isModalInPresentation = true
+            }
+            rootViewController.present(loginViewController, animated: true)
+        }
+    }
+
+    private func startPhoneInterfaceFlow() {
+        let rootViewController = RootContainerViewController()
+        rootViewController.delegate = self
+
+        let showMainController = { (_ animated: Bool) in
+            self.showConnectController(in: rootViewController, animated: animated) {
+                self.startPaymentQueueHandling()
+            }
+        }
+
+        if Account.shared.isAgreedToTermsOfService {
+            showMainController(false)
+        } else {
+            self.showTermsOfService(in: rootViewController) {_ in
+                Account.shared.agreeToTermsOfService()
+
+                showMainController(true)
+            }
+        }
+
+        self.window?.rootViewController = rootViewController
+        self.rootContainer = rootViewController
+    }
+
+    private func startPaymentQueueHandling() {
         let paymentManager = AppStorePaymentManager.shared
         paymentManager.delegate = self
 
@@ -101,7 +165,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         Account.shared.startPaymentMonitoring(with: paymentManager)
     }
 
-    private func showTermsOfService(in rootViewController: RootContainerViewController, completionHandler: @escaping () -> Void) {
+    private func showTermsOfService(in rootViewController: RootContainerViewController, completionHandler: @escaping (UIViewController) -> Void) {
         let consentViewController = ConsentViewController()
         consentViewController.completionHandler = completionHandler
 
@@ -134,6 +198,12 @@ extension AppDelegate: RootContainerViewControllerDelegate {
         settingsController.settingsDelegate = self
 
         let navController = SettingsNavigationController(navigationBarClass: CustomNavigationBar.self, toolbarClass: nil)
+
+        if controller.traitCollection.userInterfaceIdiom == .pad {
+            navController.preferredContentSize = CGSize(width: 480, height: 568)
+            navController.modalPresentationStyle = .formSheet
+        }
+
         navController.pushViewController(settingsController, animated: false)
 
         if let route = route {
@@ -158,7 +228,14 @@ extension AppDelegate: RootContainerViewControllerDelegate {
 extension AppDelegate: LoginViewControllerDelegate {
 
     func loginViewControllerDidLogin(_ controller: LoginViewController) {
-        rootContainer?.pushViewController(ConnectViewController(), animated: true)
+        switch UIDevice.current.userInterfaceIdiom {
+        case .phone:
+            rootContainer?.pushViewController(ConnectViewController(), animated: true)
+        case .pad:
+            controller.dismiss(animated: true)
+        default:
+            fatalError()
+        }
     }
 
 }
