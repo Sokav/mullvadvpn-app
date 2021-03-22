@@ -98,7 +98,12 @@ class LoginContentView: UIView {
         layoutMargins = UIMetrics.contentLayoutMargins
 
         addSubviews()
-        addKeyboardHandlers()
+
+        // Only add keyboard handlers on iPhone where the keyboard overlays the main view.
+        // On iPad this view is centered on screen.
+        if case .phone = UIDevice.current.userInterfaceIdiom {
+            addKeyboardHandlers()
+        }
     }
 
     required init?(coder: NSCoder) {
