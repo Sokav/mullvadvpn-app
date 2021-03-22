@@ -1,9 +1,7 @@
 use crate::{format::print_keygen_event, new_rpc_client, Command, Error, Result};
 use clap::value_t;
 use mullvad_management_interface::types::{self, Timestamp, TunnelOptions};
-use mullvad_types::wireguard::{
-    DEFAULT_ROTATION_INTERVAL, MAX_ROTATION_INTERVAL, MIN_ROTATION_INTERVAL,
-};
+use mullvad_types::wireguard::DEFAULT_ROTATION_INTERVAL;
 use std::{convert::TryFrom, time::Duration};
 
 pub struct Tunnel;
@@ -70,29 +68,8 @@ fn create_wireguard_keys_rotation_interval_subcommand() -> clap::App<'static, 's
         .subcommand(clap::SubCommand::with_name("get"))
         .subcommand(clap::SubCommand::with_name("reset").about("Use the default rotation interval"))
         .subcommand(
-            clap::SubCommand::with_name("set").arg(
-                clap::Arg::with_name("interval")
-                    .required(true)
-                    .validator(rotation_interval_validator),
-            ),
+            clap::SubCommand::with_name("set").arg(clap::Arg::with_name("interval").required(true)),
         )
-}
-
-fn rotation_interval_validator(v: String) -> std::result::Result<(), String> {
-    match v
-        .parse::<u64>()
-        .map_err(|_| "failed to parse integer".to_string())?
-    {
-        interval if interval < duration_hours(&MIN_ROTATION_INTERVAL) => Err(format!(
-            "interval must be at least {} hours",
-            duration_hours(&MIN_ROTATION_INTERVAL)
-        )),
-        interval if interval > duration_hours(&MAX_ROTATION_INTERVAL) => Err(format!(
-            "interval must be at most {} hours",
-            duration_hours(&MAX_ROTATION_INTERVAL)
-        )),
-        _ => Ok(()),
-    }
 }
 
 
