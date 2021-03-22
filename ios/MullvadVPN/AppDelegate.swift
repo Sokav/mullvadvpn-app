@@ -199,7 +199,7 @@ extension AppDelegate: RootContainerViewControllerDelegate {
 
         let navController = SettingsNavigationController(navigationBarClass: CustomNavigationBar.self, toolbarClass: nil)
 
-        if controller.traitCollection.userInterfaceIdiom == .pad {
+        if UIDevice.current.userInterfaceIdiom == .pad {
             navController.preferredContentSize = CGSize(width: 480, height: 568)
             navController.modalPresentationStyle = .formSheet
         }
@@ -214,7 +214,7 @@ extension AppDelegate: RootContainerViewControllerDelegate {
     }
 
     func rootContainerViewSupportedInterfaceOrientations(_ controller: RootContainerViewController) -> UIInterfaceOrientationMask {
-        switch self.window?.traitCollection.userInterfaceIdiom {
+        switch UIDevice.current.userInterfaceIdiom {
         case .pad:
             return [.landscape, .portrait]
         case .phone:

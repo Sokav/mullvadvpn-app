@@ -105,7 +105,7 @@ private extension UIControl.State {
         case .pad:
             return UIEdgeInsets(top: 15, left: 15, bottom: 15, right: 15)
         default:
-            fatalError()
+            return .zero
         }
     }
 

@@ -8,7 +8,7 @@
 
 import UIKit
 
-@IBDesignable class AccountTextField: UITextField {
+class AccountTextField: UITextField {
 
     private let input = AccountTokenInput()
 

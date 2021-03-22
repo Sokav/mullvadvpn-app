@@ -94,7 +94,7 @@ class ConnectViewController: UIViewController, RootContainment, TunnelObserver, 
         TunnelManager.shared.addObserver(self)
         self.tunnelState = TunnelManager.shared.tunnelState
 
-        switch traitCollection.userInterfaceIdiom {
+        switch UIDevice.current.userInterfaceIdiom {
         case .pad:
             setupSplitViewLayout()
 
@@ -109,7 +109,7 @@ class ConnectViewController: UIViewController, RootContainment, TunnelObserver, 
         updateLocation(animated: false)
 
         fetchRelayConstraints { (relayConstraints) in
-            if case .pad = self.traitCollection.userInterfaceIdiom {
+            if case .pad = UIDevice.current.userInterfaceIdiom {
                 self.sidebarLocationController.prefetchData(completionHandler: { (error) in
                     if let error = error {
                         self.logger.error(chainedError: error, message: "Failed to prefetch data for SelectLocationViewController (sidebar)")
@@ -124,7 +124,7 @@ class ConnectViewController: UIViewController, RootContainment, TunnelObserver, 
     override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
         super.viewWillTransition(to: size, with: coordinator)
 
-        if case .pad = traitCollection.userInterfaceIdiom {
+        if case .pad = UIDevice.current.userInterfaceIdiom {
             sidebarViewWidthConstraint?.constant = preferredWidthForSidebarView(viewSize: size)
             coordinator.animate { (context) in
                 self.view.layoutSubviews()
