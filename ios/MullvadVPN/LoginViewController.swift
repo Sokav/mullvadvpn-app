@@ -88,6 +88,20 @@ class LoginViewController: UIViewController, RootContainment {
 
         contentView.accountTextField.inputAccessoryView = self.accountInputAccessoryToolbar
 
+        // The return key on iPad should behave the same way as "Log in" button in the toolbar
+        if case .pad = UIDevice.current.userInterfaceIdiom {
+            contentView.accountTextField.onReturnKey = { [weak self] _ in
+                guard let self = self else { return true }
+
+                if self.canBeginLogin() {
+                    self.doLogin()
+                    return true
+                } else {
+                    return false
+                }
+            }
+        }
+
         updateDisplayedMessage()
         updateStatusIcon()
         updateKeyboardToolbar()
@@ -239,10 +253,13 @@ class LoginViewController: UIViewController, RootContainment {
     }
 
     private func updateKeyboardToolbar() {
-        let accountTokenLength = contentView.accountTextField.parsedToken.count
-        let enableButton = accountTokenLength >= kMinimumAccountTokenLength
+        accountInputAccessoryLoginButton.isEnabled = canBeginLogin()
+        contentView.accountTextField.enableReturnKey = canBeginLogin()
+    }
 
-        accountInputAccessoryLoginButton.isEnabled = enableButton
+    private func canBeginLogin() -> Bool {
+        let accountTokenLength = contentView.accountTextField.parsedToken.count
+        return accountTokenLength >= kMinimumAccountTokenLength
     }
 }
 
