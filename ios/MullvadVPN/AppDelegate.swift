@@ -51,9 +51,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Update relays
         RelayCache.shared.updateRelays()
 
-        // Add account observer
-        Account.shared.addObserver(self)
-
         // Load tunnels
         let accountToken = Account.shared.token
         TunnelManager.shared.loadTunnel(accountToken: accountToken) { (result) in
@@ -77,6 +74,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
         // Show the window
         self.window?.makeKeyAndVisible()
+
+        startPaymentQueueHandling()
 
         return true
     }
@@ -108,7 +107,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                 
                 if Account.shared.isLoggedIn {
                     viewController.dismiss(animated: true) {
-                        self.startPaymentQueueHandling()
                         self.showAccountControllerIfExpired()
                     }
                 } else {
@@ -155,7 +153,6 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             }
 
             rootViewController.setViewControllers(viewControllers, animated: animated) {
-                self.startPaymentQueueHandling()
                 self.showAccountControllerIfExpired()
             }
         }
@@ -177,16 +174,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         self.rootContainer = rootViewController
     }
 
-    private var hasStartedPaymentQueueHandling = false
     private func startPaymentQueueHandling() {
-        guard !hasStartedPaymentQueueHandling else { return }
-
-        hasStartedPaymentQueueHandling = true
-
         let paymentManager = AppStorePaymentManager.shared
         paymentManager.delegate = self
-
         paymentManager.startPaymentQueueMonitoring()
+
         Account.shared.startPaymentMonitoring(with: paymentManager)
     }
 
