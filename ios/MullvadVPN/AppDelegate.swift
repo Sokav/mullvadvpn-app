@@ -103,7 +103,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
             consentViewController.completionHandler = { [weak self] (viewController) in
                 guard let self = self else { return }
 
-//                Account.shared.agreeToTermsOfService()
+                Account.shared.agreeToTermsOfService()
                 
                 if Account.shared.isLoggedIn {
                     viewController.dismiss(animated: true) {
