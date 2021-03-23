@@ -65,7 +65,7 @@ class ConnectMainContentView: UIView {
         super.init(frame: frame)
 
         backgroundColor = .primaryColor
-        layoutMargins = UIEdgeInsets(top: 24, left: 24, bottom: 24, right: 24)
+        layoutMargins = UIMetrics.contentLayoutMargins
 
         addSubviews()
     }
@@ -92,10 +92,31 @@ class ConnectMainContentView: UIView {
         addSubview(containerView)
         [secureLabel, countryLabel, cityLabel, connectionPanel, buttonsStackView].forEach { containerView.addSubview($0) }
 
-        NSLayoutConstraint.activate([
+        var layoutConstraints = [NSLayoutConstraint]()
+
+        switch UIDevice.current.userInterfaceIdiom {
+        case .pad:
+            // Max container width is 70% width of iPad in portrait mode
+            let maxWidth = min(UIScreen.main.nativeBounds.width * 0.7, UIMetrics.maximumSplitViewContentContainerWidth)
+            let containerWidthConstraint = containerView.widthAnchor.constraint(equalToConstant: maxWidth)
+            containerWidthConstraint.priority = .defaultHigh
+            containerWidthConstraint.isActive = true
+
+            layoutConstraints.append(contentsOf:[
+                containerView.trailingAnchor.constraint(lessThanOrEqualTo: layoutMarginsGuide.trailingAnchor),
+                containerWidthConstraint
+            ])
+
+        case .phone:
+            layoutConstraints.append(containerView.trailingAnchor.constraint(equalTo: layoutMarginsGuide.trailingAnchor))
+
+        default:
+            fatalError()
+        }
+
+        layoutConstraints.append(contentsOf: [
             containerView.topAnchor.constraint(equalTo: layoutMarginsGuide.topAnchor),
             containerView.leadingAnchor.constraint(equalTo: layoutMarginsGuide.leadingAnchor),
-            containerView.trailingAnchor.constraint(equalTo: layoutMarginsGuide.trailingAnchor),
             containerView.bottomAnchor.constraint(equalTo: layoutMarginsGuide.bottomAnchor),
 
             secureLabel.topAnchor.constraint(greaterThanOrEqualTo: containerView.topAnchor),
@@ -119,6 +140,8 @@ class ConnectMainContentView: UIView {
             buttonsStackView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
             buttonsStackView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor)
         ])
+
+        NSLayoutConstraint.activate(layoutConstraints)
     }
 
     private func setArrangedButtons(_ newButtons: [UIView]) {

@@ -47,6 +47,10 @@ extension UIColor {
         static let inactiveColor = dangerColor.withAlphaComponent(0.95)
     }
 
+    enum MainSplitView {
+        static let columnSeparatorColor = secondaryColor
+    }
+
     // Cells
     enum Cell {
         static let backgroundColor = primaryColor

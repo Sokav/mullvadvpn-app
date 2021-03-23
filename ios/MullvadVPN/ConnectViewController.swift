@@ -12,13 +12,24 @@ import Logging
 
 class ConnectViewController: UIViewController, RootContainment, TunnelObserver
 {
+    private var relayConstraints: RelayConstraints?
+
     private lazy var mainContentView: ConnectMainContentView = {
         let view = ConnectMainContentView(frame: UIScreen.main.bounds)
         view.translatesAutoresizingMaskIntoConstraints = false
         return view
     }()
 
-    private var relayConstraints: RelayConstraints?
+    private lazy var sidebarLocationController: SelectLocationViewController = {
+        let contentController = SelectLocationViewController()
+        contentController.scrollToSelectedRelayOnViewWillAppear = false
+        contentController.didSelectRelayLocation = { [weak self] (controller, relayLocation) in
+            self?.selectLocationControllerDidSelectRelayLocation(relayLocation)
+        }
+
+        return contentController
+    }()
+    private var sidebarViewWidthConstraint: NSLayoutConstraint?
 
     private let logger = Logger(label: "ConnectViewController")
     private let alertPresenter = AlertPresenter()
@@ -61,18 +72,109 @@ class ConnectViewController: UIViewController, RootContainment, TunnelObserver
 
         mainContentView.selectLocationButton.addTarget(self, action: #selector(handleSelectLocation(_:)), for: .touchUpInside)
 
+        TunnelManager.shared.addObserver(self)
+        self.tunnelState = TunnelManager.shared.tunnelState
+
+        switch traitCollection.userInterfaceIdiom {
+        case .pad:
+            setupSplitViewLayout()
+
+        case .phone:
+            setupSingleViewLayout()
+
+        default:
+            break
+        }
+
+        fetchRelayConstraints { (relayConstraints) in
+            if case .pad = self.traitCollection.userInterfaceIdiom {
+                self.sidebarLocationController.prefetchData(completionHandler: { (error) in
+                    if let error = error {
+                        self.logger.error(chainedError: error, message: "Failed to prefetch data for SelectLocationViewController (sidebar)")
+                    }
+                    self.sidebarLocationController.setSelectedRelayLocation(
+                        relayConstraints?.location.value, animated: false, scrollPosition: .middle)
+                })
+            }
+        }
+    }
+
+    override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
+        super.viewWillTransition(to: size, with: coordinator)
+
+        if case .pad = traitCollection.userInterfaceIdiom {
+            sidebarViewWidthConstraint?.constant = preferredWidthForSidebarView(viewSize: size)
+            coordinator.animate { (context) in
+                self.view.layoutSubviews()
+            }
+        }
+    }
+
+    private func fetchRelayConstraints(completion: @escaping (RelayConstraints?) -> Void) {
+        TunnelManager.shared.getRelayConstraints { (result) in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let relayConstraints):
+                    self.relayConstraints = relayConstraints
+                    completion(relayConstraints)
+
+                case .failure(let error):
+                    self.logger.error(chainedError: error)
+                    completion(nil)
+                }
+            }
+        }
+    }
+
+    private func selectLocationControllerDidSelectRelayLocation(_ relayLocation: RelayLocation) {
+        let relayConstraints = makeRelayConstraints(relayLocation)
+
+        self.setTunnelRelayConstraints(relayConstraints)
+        self.relayConstraints = relayConstraints
+    }
+
+    private func preferredWidthForSidebarView(viewSize: CGSize) -> CGFloat {
+        return max(300, viewSize.width * 0.3)
+    }
+
+    private func setupSingleViewLayout() {
         view.addSubview(mainContentView)
         NSLayoutConstraint.activate([
             mainContentView.topAnchor.constraint(equalTo: view.topAnchor),
             mainContentView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             mainContentView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            mainContentView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            mainContentView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+    }
+
+    private func setupSplitViewLayout() {
+        let columnLayoutStackView = UIStackView()
+        columnLayoutStackView.spacing = 0
+        columnLayoutStackView.translatesAutoresizingMaskIntoConstraints = false
+
+        view.addSubview(columnLayoutStackView)
+        NSLayoutConstraint.activate([
+            columnLayoutStackView.topAnchor.constraint(equalTo: view.topAnchor),
+            columnLayoutStackView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            columnLayoutStackView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            columnLayoutStackView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
         ])
 
-        TunnelManager.shared.addObserver(self)
-        self.tunnelState = TunnelManager.shared.tunnelState
+        let separatorView = UIView()
+        separatorView.backgroundColor = UIColor.MainSplitView.columnSeparatorColor
+        separatorView.widthAnchor.constraint(equalToConstant: 1).isActive = true
+        columnLayoutStackView.addArrangedSubview(mainContentView)
+        columnLayoutStackView.addArrangedSubview(separatorView)
 
-        fetchRelayConstraints()
+        addChild(sidebarLocationController)
+        sidebarLocationController.view.translatesAutoresizingMaskIntoConstraints = false
+
+        columnLayoutStackView.addArrangedSubview(sidebarLocationController.view)
+        sidebarLocationController.didMove(toParent: self)
+
+        sidebarViewWidthConstraint = sidebarLocationController.view.widthAnchor
+            .constraint(equalToConstant: preferredWidthForSidebarView(viewSize: view.frame.size))
+        sidebarViewWidthConstraint?.isActive = true
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -94,6 +196,27 @@ class ConnectViewController: UIViewController, RootContainment, TunnelObserver
     }
 
     // MARK: - Private
+
+    private func makeRelayConstraints(_ location: RelayLocation) -> RelayConstraints {
+        return RelayConstraints(location: .only(location))
+    }
+
+    private func setTunnelRelayConstraints(_ relayConstraints: RelayConstraints) {
+        TunnelManager.shared.setRelayConstraints(relayConstraints) { [weak self] (result) in
+            guard let self = self else { return }
+
+            DispatchQueue.main.async {
+                switch result {
+                case .success:
+                    self.logger.debug("Updated relay constraints: \(relayConstraints)")
+                    self.connectTunnel()
+
+                case .failure(let error):
+                    self.logger.error(chainedError: error, message: "Failed to update relay constraints")
+                }
+            }
+        }
+    }
 
     private func updateUserInterfaceForTunnelStateChange() {
         mainContentView.secureLabel.text = tunnelState.localizedTitleForSecureLabel.uppercased()
@@ -224,48 +347,6 @@ class ConnectViewController: UIViewController, RootContainment, TunnelObserver
         }
     }
 
-    private func fetchRelayConstraints() {
-        TunnelManager.shared.getRelayConstraints { (result) in
-            DispatchQueue.main.async {
-                switch result {
-                case .success(let relayConstraints):
-                    self.relayConstraints = relayConstraints
-
-                case .failure(let error):
-                    self.logger.error(chainedError: error)
-                }
-            }
-        }
-    }
-
-    private func selectLocationControllerDidSelectRelayLocation(_ relayLocation: RelayLocation) {
-        let relayConstraints = makeRelayConstraints(relayLocation)
-
-        self.setTunnelRelayConstraints(relayConstraints)
-        self.relayConstraints = relayConstraints
-    }
-
-    private func makeRelayConstraints(_ location: RelayLocation) -> RelayConstraints {
-        return RelayConstraints(location: .only(location))
-    }
-
-    private func setTunnelRelayConstraints(_ relayConstraints: RelayConstraints) {
-        TunnelManager.shared.setRelayConstraints(relayConstraints) { [weak self] (result) in
-            guard let self = self else { return }
-
-            DispatchQueue.main.async {
-                switch result {
-                case .success:
-                    self.logger.debug("Updated relay constraints: \(relayConstraints)")
-                    self.connectTunnel()
-
-                case .failure(let error):
-                    self.logger.error(chainedError: error, message: "Failed to update relay constraints")
-                }
-            }
-        }
-    }
-
     // MARK: - Actions
 
     @objc func handleConnectionPanelButton(_ sender: Any) {
@@ -347,12 +428,27 @@ private extension TunnelState {
     }
 
     var actionButtons: [ConnectMainContentView.ActionButton] {
-        switch self {
-        case .disconnected, .disconnecting:
-            return [.selectLocation, .connect]
+        switch UIDevice.current.userInterfaceIdiom {
+        case .phone:
+            switch self {
+            case .disconnected, .disconnecting:
+                return [.selectLocation, .connect]
 
-        case .connecting, .connected, .reconnecting:
-            return [.selectLocation, .disconnect]
+            case .connecting, .connected, .reconnecting:
+                return [.selectLocation, .disconnect]
+            }
+
+        case .pad:
+            switch self {
+            case .disconnected, .disconnecting:
+                return [.connect]
+
+            case .connecting, .connected, .reconnecting:
+                return [.disconnect]
+            }
+
+        default:
+            fatalError("Not supported")
         }
     }
 
