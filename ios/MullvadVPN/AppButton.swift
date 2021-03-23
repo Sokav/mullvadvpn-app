@@ -98,7 +98,16 @@ private extension UIControl.State {
 /// A subclass that implements action buttons used across the app
 @IBDesignable class AppButton: CustomButton {
 
-    static let defaultContentInsets = UIEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
+    static var defaultContentInsets: UIEdgeInsets {
+        switch UIDevice.current.userInterfaceIdiom {
+        case .phone:
+            return UIEdgeInsets(top: 10, left: 10, bottom: 10, right: 10)
+        case .pad:
+            return UIEdgeInsets(top: 15, left: 15, bottom: 15, right: 15)
+        default:
+            fatalError()
+        }
+    }
 
     enum Style: Int {
         case `default`
