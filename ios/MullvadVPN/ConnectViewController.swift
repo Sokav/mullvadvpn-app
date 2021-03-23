@@ -19,9 +19,16 @@ class CustomOverlayRenderer: MKOverlayRenderer {
     }
 }
 
-class ConnectViewController: UIViewController, RootContainment, TunnelObserver, MKMapViewDelegate
+class ConnectViewController: UIViewController, RootContainment, TunnelObserver, AccountObserver, MKMapViewDelegate
 {
     private var relayConstraints: RelayConstraints?
+
+    private lazy var columnLayoutStackView: UIStackView = {
+        let columnLayoutStackView = UIStackView()
+        columnLayoutStackView.spacing = 0
+        columnLayoutStackView.translatesAutoresizingMaskIntoConstraints = false
+        return columnLayoutStackView
+    }()
 
     private lazy var mainContentView: ConnectMainContentView = {
         let view = ConnectMainContentView(frame: UIScreen.main.bounds)
@@ -79,8 +86,6 @@ class ConnectViewController: UIViewController, RootContainment, TunnelObserver, 
         }
     }
 
-    private var showedAccountView = false
-
     override func viewDidLoad() {
         super.viewDidLoad()
 
@@ -98,27 +103,26 @@ class ConnectViewController: UIViewController, RootContainment, TunnelObserver, 
         case .pad:
             setupSplitViewLayout()
 
+            Account.shared.addObserver(self)
+
+            if Account.shared.isLoggedIn {
+                prepareSidebarControllerData {
+                    self.setSidebarControllerHidden(false, animated: true)
+                }
+            } else {
+                setSidebarControllerHidden(true, animated: false)
+                setMainContentHidden(true, animated: false)
+            }
+
         case .phone:
             setupSingleViewLayout()
 
         default:
-            break
+            fatalError()
         }
 
         setupMapView()
         updateLocation(animated: false)
-
-        fetchRelayConstraints { (relayConstraints) in
-            if case .pad = UIDevice.current.userInterfaceIdiom {
-                self.sidebarLocationController.prefetchData(completionHandler: { (error) in
-                    if let error = error {
-                        self.logger.error(chainedError: error, message: "Failed to prefetch data for SelectLocationViewController (sidebar)")
-                    }
-                    self.sidebarLocationController.setSelectedRelayLocation(
-                        relayConstraints?.location.value, animated: false, scrollPosition: .middle)
-                })
-            }
-        }
     }
 
     override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
@@ -159,6 +163,50 @@ class ConnectViewController: UIViewController, RootContainment, TunnelObserver, 
         return max(300, viewSize.width * 0.3)
     }
 
+    private func prepareSidebarControllerData(completion: @escaping () -> Void) {
+        fetchRelayConstraints { (relayConstraints) in
+            if case .pad = UIDevice.current.userInterfaceIdiom {
+                self.sidebarLocationController.prefetchData(completionHandler: { (error) in
+                    if let error = error {
+                        self.logger.error(chainedError: error, message: "Failed to prefetch data for SelectLocationViewController (sidebar)")
+                    }
+                    self.sidebarLocationController.setSelectedRelayLocation(
+                        relayConstraints?.location.value, animated: false, scrollPosition: .middle)
+
+                    completion()
+                })
+            }
+        }
+    }
+
+    private func setMainContentHidden(_ isHidden: Bool, animated: Bool) {
+        let actions = {
+            self.mainContentView.containerView.alpha = isHidden ? 0 : 1
+        }
+
+        if animated {
+            UIView.animate(withDuration: 0.25) {
+                actions()
+            }
+        } else {
+            actions()
+        }
+    }
+
+    private func setSidebarControllerHidden(_ isHidden: Bool, animated: Bool) {
+        let actions = {
+            self.sidebarLocationController.view.isHidden = isHidden
+        }
+
+        if animated {
+            UIView.animate(withDuration: 0.25) {
+                actions()
+            }
+        } else {
+            actions()
+        }
+    }
+
     private func setupSingleViewLayout() {
         view.addSubview(mainContentView)
         NSLayoutConstraint.activate([
@@ -170,10 +218,6 @@ class ConnectViewController: UIViewController, RootContainment, TunnelObserver, 
     }
 
     private func setupSplitViewLayout() {
-        let columnLayoutStackView = UIStackView()
-        columnLayoutStackView.spacing = 0
-        columnLayoutStackView.translatesAutoresizingMaskIntoConstraints = false
-
         view.addSubview(columnLayoutStackView)
         NSLayoutConstraint.activate([
             columnLayoutStackView.topAnchor.constraint(equalTo: view.topAnchor),
@@ -215,6 +259,28 @@ class ConnectViewController: UIViewController, RootContainment, TunnelObserver, 
 
     func tunnelPublicKeyDidChange(publicKeyWithMetadata: PublicKeyWithMetadata?) {
         // no-op
+    }
+
+    // MARK: - AccountObserver
+
+    func account(_ account: Account, didLoginWithToken token: String, expiry: Date) {
+        guard case .pad = UIDevice.current.userInterfaceIdiom else { return }
+
+        prepareSidebarControllerData {
+            self.setSidebarControllerHidden(false, animated: true)
+            self.setMainContentHidden(false, animated: true)
+        }
+    }
+
+    func account(_ account: Account, didUpdateExpiry expiry: Date) {
+        // no-op
+    }
+
+    func accountDidLogout(_ account: Account) {
+        guard case .pad = UIDevice.current.userInterfaceIdiom else { return }
+
+        setSidebarControllerHidden(true, animated: true)
+        self.setMainContentHidden(true, animated: true)
     }
 
     // MARK: - Private

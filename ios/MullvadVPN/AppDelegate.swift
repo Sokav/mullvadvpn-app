@@ -51,6 +51,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // Update relays
         RelayCache.shared.updateRelays()
 
+        // Add account observer
+        Account.shared.addObserver(self)
+
         // Load tunnels
         let accountToken = Account.shared.token
         TunnelManager.shared.loadTunnel(accountToken: accountToken) { (result) in
@@ -105,32 +108,29 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                 
                 if Account.shared.isLoggedIn {
                     viewController.dismiss(animated: true) {
-                        // no-op
+                        self.startPaymentQueueHandling()
                     }
                 } else {
-                    let loginViewController = LoginViewController()
-                    loginViewController.delegate = self
-                    loginViewController.preferredContentSize = CGSize(width: 320, height: 400)
-                    loginViewController.modalPresentationStyle = .formSheet
-                    if #available(iOS 13.0, *) {
-                        loginViewController.isModalInPresentation = true
-                    }
                     viewController.dismiss(animated: true) {
-                        rootViewController.present(loginViewController, animated: true)
+                        rootViewController.present(self.makeLoginControllerForPad(), animated: true)
                     }
                 }
             }
             rootViewController.present(consentViewController, animated: true)
         } else if !Account.shared.isLoggedIn {
-            let loginViewController = LoginViewController()
-            loginViewController.delegate = self
-            loginViewController.preferredContentSize = CGSize(width: 320, height: 400)
-            loginViewController.modalPresentationStyle = .formSheet
-            if #available(iOS 13.0, *) {
-                loginViewController.isModalInPresentation = true
-            }
-            rootViewController.present(loginViewController, animated: true)
+            rootViewController.present(makeLoginControllerForPad(), animated: true)
         }
+    }
+
+    private func makeLoginControllerForPad() -> LoginViewController {
+        let controller = LoginViewController()
+        controller.delegate = self
+        controller.preferredContentSize = CGSize(width: 320, height: 400)
+        controller.modalPresentationStyle = .formSheet
+        if #available(iOS 13.0, *) {
+            controller.isModalInPresentation = true
+        }
+        return controller
     }
 
     private func startPhoneInterfaceFlow() {
@@ -138,7 +138,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         rootViewController.delegate = self
 
         let showMainController = { (_ animated: Bool) in
-            self.showConnectController(in: rootViewController, animated: animated) {
+            let loginViewController = LoginViewController()
+            loginViewController.delegate = self
+
+            var viewControllers: [UIViewController] = [loginViewController]
+
+            if Account.shared.isLoggedIn {
+                viewControllers.append(ConnectViewController())
+            }
+
+            rootViewController.setViewControllers(viewControllers, animated: animated) {
                 self.startPaymentQueueHandling()
             }
         }
@@ -146,47 +155,31 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         if Account.shared.isAgreedToTermsOfService {
             showMainController(false)
         } else {
-            self.showTermsOfService(in: rootViewController) {_ in
+            let consentViewController = ConsentViewController()
+            consentViewController.completionHandler = { _ in
                 Account.shared.agreeToTermsOfService()
 
                 showMainController(true)
             }
+
+            rootViewController.setViewControllers([consentViewController], animated: false)
         }
 
         self.window?.rootViewController = rootViewController
         self.rootContainer = rootViewController
     }
 
+    private var hasStartedPaymentQueueHandling = false
     private func startPaymentQueueHandling() {
+        guard !hasStartedPaymentQueueHandling else { return }
+
+        hasStartedPaymentQueueHandling = true
+
         let paymentManager = AppStorePaymentManager.shared
         paymentManager.delegate = self
 
         paymentManager.startPaymentQueueMonitoring()
         Account.shared.startPaymentMonitoring(with: paymentManager)
-    }
-
-    private func showTermsOfService(in rootViewController: RootContainerViewController, completionHandler: @escaping (UIViewController) -> Void) {
-        let consentViewController = ConsentViewController()
-        consentViewController.completionHandler = completionHandler
-
-        rootViewController.setViewControllers([consentViewController], animated: false)
-    }
-
-    private func showConnectController(
-        in rootViewController: RootContainerViewController,
-        animated: Bool,
-        completionHandler: @escaping () -> Void)
-    {
-        let loginViewController = LoginViewController()
-        loginViewController.delegate = self
-
-        var viewControllers: [UIViewController] = [loginViewController]
-
-        if Account.shared.isLoggedIn {
-            viewControllers.append(ConnectViewController())
-        }
-
-        rootViewController.setViewControllers(viewControllers, animated: animated, completion: completionHandler)
     }
 
 }
@@ -251,6 +244,25 @@ extension AppDelegate: SettingsViewControllerDelegate {
             loginController?.reset()
         }
         controller.dismiss(animated: true)
+    }
+
+}
+
+extension AppDelegate: AccountObserver {
+    func account(_ account: Account, didUpdateExpiry expiry: Date) {
+        // no-op
+    }
+
+    func account(_ account: Account, didLoginWithToken token: String, expiry: Date) {
+        startPaymentQueueHandling()
+    }
+
+    func accountDidLogout(_ account: Account) {
+        guard case .pad = UIDevice.current.userInterfaceIdiom else {
+            return
+        }
+
+        rootContainer?.present(makeLoginControllerForPad(), animated: true)
     }
 
 }
