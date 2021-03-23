@@ -240,33 +240,28 @@ extension AppDelegate: LoginViewControllerDelegate {
 extension AppDelegate: SettingsViewControllerDelegate {
 
     func settingsViewController(_ controller: SettingsViewController, didFinishWithReason reason: SettingsDismissReason) {
-        if case .userLoggedOut = reason {
-            rootContainer?.popToRootViewController(animated: false)
+        switch UIDevice.current.userInterfaceIdiom {
+        case .phone:
+            if case .userLoggedOut = reason {
+                rootContainer?.popToRootViewController(animated: false)
 
-            let loginController = rootContainer?.topViewController as? LoginViewController
+                let loginController = rootContainer?.topViewController as? LoginViewController
 
-            loginController?.reset()
-        }
-        controller.dismiss(animated: true)
-    }
+                loginController?.reset()
+            }
+            controller.dismiss(animated: true)
 
-}
+        case .pad:
+            controller.dismiss(animated: true) {
+                if case .userLoggedOut = reason {
+                    self.rootContainer?.present(self.makeLoginControllerForPad(), animated: true)
+                }
+            }
 
-extension AppDelegate: AccountObserver {
-    func account(_ account: Account, didUpdateExpiry expiry: Date) {
-        // no-op
-    }
-
-    func account(_ account: Account, didLoginWithToken token: String, expiry: Date) {
-        startPaymentQueueHandling()
-    }
-
-    func accountDidLogout(_ account: Account) {
-        guard case .pad = UIDevice.current.userInterfaceIdiom else {
-            return
+        default:
+            fatalError()
         }
 
-        rootContainer?.present(makeLoginControllerForPad(), animated: true)
     }
 
 }
