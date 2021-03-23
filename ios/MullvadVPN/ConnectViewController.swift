@@ -243,12 +243,6 @@ class ConnectViewController: UIViewController, RootContainment, TunnelObserver, 
         sidebarViewWidthConstraint?.isActive = true
     }
 
-    override func viewDidAppear(_ animated: Bool) {
-        super.viewDidAppear(animated)
-
-        showAccountViewForExpiredAccount()
-    }
-
     // MARK: - TunnelObserver
 
     func tunnelStateDidChange(tunnelState: TunnelState) {
@@ -392,16 +386,6 @@ class ConnectViewController: UIViewController, RootContainment, TunnelObserver, 
 
     private func reconnectTunnel() {
         TunnelManager.shared.reconnectTunnel(completionHandler: nil)
-    }
-
-    private func showAccountViewForExpiredAccount() {
-        guard !showedAccountView else { return }
-
-        showedAccountView = true
-
-        if let accountExpiry = Account.shared.expiry, AccountExpiry(date: accountExpiry).isExpired {
-            rootContainerController?.showSettings(navigateTo: .account, animated: true)
-        }
     }
 
     private func showSelectLocationModal() {

@@ -109,6 +109,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
                 if Account.shared.isLoggedIn {
                     viewController.dismiss(animated: true) {
                         self.startPaymentQueueHandling()
+                        self.showAccountControllerIfExpired()
                     }
                 } else {
                     viewController.dismiss(animated: true) {
@@ -133,6 +134,12 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return controller
     }
 
+    private func showAccountControllerIfExpired() {
+        if let accountExpiry = Account.shared.expiry, AccountExpiry(date: accountExpiry).isExpired {
+            rootContainer?.showSettings(navigateTo: .account, animated: true)
+        }
+    }
+
     private func startPhoneInterfaceFlow() {
         let rootViewController = RootContainerViewController()
         rootViewController.delegate = self
@@ -149,6 +156,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
             rootViewController.setViewControllers(viewControllers, animated: animated) {
                 self.startPaymentQueueHandling()
+                self.showAccountControllerIfExpired()
             }
         }
 
@@ -223,9 +231,13 @@ extension AppDelegate: LoginViewControllerDelegate {
     func loginViewControllerDidLogin(_ controller: LoginViewController) {
         switch UIDevice.current.userInterfaceIdiom {
         case .phone:
-            rootContainer?.pushViewController(ConnectViewController(), animated: true)
+            rootContainer?.pushViewController(ConnectViewController(), animated: true) {
+                self.showAccountControllerIfExpired()
+            }
         case .pad:
-            controller.dismiss(animated: true)
+            controller.dismiss(animated: true) {
+                self.showAccountControllerIfExpired()
+            }
         default:
             fatalError()
         }
