@@ -12,7 +12,15 @@ import UIKit
 class DisconnectSplitButton: UIView {
 
     private var secondaryButtonSize: CGSize {
-        return CGSize(width: 42, height: 42)
+        // TODO: make it less hardcoded
+        switch UIDevice.current.userInterfaceIdiom {
+        case .phone:
+            return CGSize(width: 42, height: 42)
+        case .pad:
+            return CGSize(width: 52, height: 52)
+        default:
+            fatalError()
+        }
     }
 
     let primaryButton = AppButton(style: .translucentDangerSplitLeft)
