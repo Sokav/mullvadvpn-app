@@ -49,6 +49,7 @@ Line wrap the file at 100 chars.                                              Th
 - Shrink account history capactity from 3 account entries to 1.
 - Allow whitespace in account token in CLI.
 - Read account token from standard input unless given as an argument in CLI.
+- Attempt to send problem reports using other endpoints if using the primary one fails.
 
 #### Android
 - WireGuard key is now rotated sooner: every four days instead of seven.
