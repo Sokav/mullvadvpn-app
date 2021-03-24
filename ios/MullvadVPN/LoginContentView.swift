@@ -10,6 +10,8 @@ import UIKit
 
 class LoginContentView: UIView {
 
+    private var keyboardResponder: AutomaticKeyboardResponder?
+
     lazy var titleLabel: UILabel = {
         let textLabel = UILabel()
         textLabel.font = UIFont.systemFont(ofSize: 32)
@@ -97,13 +99,14 @@ class LoginContentView: UIView {
         backgroundColor = .primaryColor
         layoutMargins = UIMetrics.contentLayoutMargins
 
-        addSubviews()
+        keyboardResponder = AutomaticKeyboardResponder(targetView: self, handler: { [weak self] (view, adjustment) in
+            self?.contentContainerBottomConstraint?.constant = adjustment
 
-        // Only add keyboard handlers on iPhone where the keyboard overlays the main view.
-        // On iPad this view is centered on screen.
-        if case .phone = UIDevice.current.userInterfaceIdiom {
-            addKeyboardHandlers()
-        }
+            self?.layoutIfNeeded()
+            self?.updateStatusImageVisibility(animated: false)
+        })
+
+        addSubviews()
     }
 
     required init?(coder: NSCoder) {
@@ -202,51 +205,4 @@ class LoginContentView: UIView {
         ])
     }
 
-    private func addKeyboardHandlers() {
-        let notificationCenter = NotificationCenter.default
-
-        notificationCenter.addObserver(self,
-                                       selector: #selector(keyboardWillShow(_:)),
-                                       name: UIWindow.keyboardWillShowNotification,
-                                       object: nil)
-        notificationCenter.addObserver(self,
-                                       selector: #selector(keyboardWillChangeFrame(_:)),
-                                       name: UIWindow.keyboardWillChangeFrameNotification,
-                                       object: nil)
-        notificationCenter.addObserver(self,
-                                       selector: #selector(keyboardWillHide(_:)),
-                                       name: UIWindow.keyboardWillHideNotification,
-                                       object: nil)
-    }
-
-
-    // MARK: - Keyboard notifications
-
-    @objc private func keyboardWillShow(_ notification: Notification) {
-        guard let keyboardFrameValue = notification.userInfo?[UIWindow.keyboardFrameEndUserInfoKey] as? NSValue else { return }
-
-        makeLoginFormVisible(keyboardFrame: keyboardFrameValue.cgRectValue)
-    }
-
-    @objc private func keyboardWillChangeFrame(_ notification: Notification) {
-        guard let keyboardFrameValue = notification.userInfo?[UIWindow.keyboardFrameEndUserInfoKey] as? NSValue else { return }
-
-        makeLoginFormVisible(keyboardFrame: keyboardFrameValue.cgRectValue)
-    }
-
-    @objc private func keyboardWillHide(_ notification: Notification) {
-        contentContainerBottomConstraint?.constant = 0
-        layoutIfNeeded()
-        updateStatusImageVisibility(animated: false)
-    }
-
-    private func makeLoginFormVisible(keyboardFrame: CGRect) {
-        let viewFrame = convert(bounds, to: nil)
-        let intersection = viewFrame.intersection(keyboardFrame)
-
-        contentContainerBottomConstraint?.constant = intersection.height
-
-        layoutIfNeeded()
-        updateStatusImageVisibility(animated: false)
-    }
 }
